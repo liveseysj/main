@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scalp Dashboard</title>
+<style>
+/* ------------------------------------------------------------------ */
+/*  Dark trading-terminal theme                                        */
+/* ------------------------------------------------------------------ */
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font-family:'Consolas','Monaco','Courier New',monospace;font-size:13px}
+a{color:#58a6ff}
+
+/* ---- Top controls bar ---- */
+#controls{
+  display:flex;flex-wrap:wrap;align-items:center;gap:16px;
+  padding:12px 18px;background:#161b22;border-bottom:1px solid #21262d;
+}
+#controls h1{font-size:15px;color:#58a6ff;letter-spacing:1px;margin-right:12px;white-space:nowrap}
+.param-group{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.param-group label{color:#8b949e;font-size:12px}
+.param-group input{
+  width:68px;padding:4px 6px;border:1px solid #30363d;border-radius:4px;
+  background:#0d1117;color:#c9d1d9;font-family:inherit;font-size:12px;text-align:right;
+}
+.param-group input:focus{border-color:#58a6ff;outline:none}
+.param-group .unit{color:#484f58;font-size:11px}
+#btn-pause{
+  padding:6px 16px;border:1px solid #30363d;border-radius:4px;
+  background:#21262d;color:#c9d1d9;cursor:pointer;font-family:inherit;font-size:12px;
+  transition:background .15s;
+}
+#btn-pause:hover{background:#30363d}
+#btn-pause.paused{background:#7c2d2d;border-color:#f85149;color:#ffa198}
+#status-dot{
+  width:10px;height:10px;border-radius:50%;display:inline-block;
+  background:#f85149;transition:background .3s;
+}
+#status-dot.connected{background:#3fb950}
+#status-dot.connecting{background:#d29922}
+#spacer{flex:1}
+#row-count{color:#484f58;font-size:12px;white-space:nowrap}
+
+/* ---- Filter help tooltip ---- */
+#filter-help{color:#484f58;font-size:11px;margin-left:4px;cursor:help;position:relative}
+#filter-help:hover::after{
+  content:'Filters:  >N  <N  >=N  <=N  N..M (between)  text (ticker)';
+  position:absolute;bottom:120%;left:0;background:#1c2128;color:#8b949e;
+  padding:6px 10px;border:1px solid #30363d;border-radius:4px;white-space:nowrap;
+  font-size:11px;z-index:10;
+}
+
+/* ---- Table ---- */
+#table-wrap{overflow-x:auto;padding:0 8px 20px}
+table{width:100%;border-collapse:collapse;min-width:860px}
+thead{position:sticky;top:0;z-index:5}
+
+/* header row */
+th{
+  background:#161b22;padding:8px 10px;text-align:right;border-bottom:2px solid #21262d;
+  cursor:pointer;user-select:none;white-space:nowrap;font-weight:600;color:#8b949e;
+  transition:color .15s;font-size:12px;
+}
+th:first-child{text-align:left}
+th:hover{color:#c9d1d9}
+th .arrow{font-size:10px;margin-left:3px;color:#484f58}
+th.sorted-asc .arrow,th.sorted-desc .arrow{color:#58a6ff}
+
+/* filter row */
+tr.filter-row th{
+  padding:4px 4px 6px;cursor:default;border-bottom:1px solid #21262d;
+}
+tr.filter-row input{
+  width:100%;padding:3px 5px;border:1px solid #30363d;border-radius:3px;
+  background:#0d1117;color:#c9d1d9;font-family:inherit;font-size:11px;
+}
+tr.filter-row input:focus{border-color:#58a6ff;outline:none}
+tr.filter-row input::placeholder{color:#30363d}
+
+/* data rows */
+td{
+  padding:5px 10px;text-align:right;border-bottom:1px solid #21262d;
+  white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+td:first-child{text-align:left;font-weight:600;color:#e6edf3}
+tr.data-row:hover td{background:#161b22}
+
+/* colour classes */
+.pos{color:#3fb950}.neg{color:#f85149}.muted{color:#484f58}.highlight{color:#d29922}
+
+/* ---- Responsive ---- */
+@media(max-width:900px){
+  #controls{gap:10px;padding:8px 10px}
+  .param-group input{width:56px}
+}
+</style>
+</head>
+
+<body>
+<!-- ============================================================== -->
+<!--  Controls bar                                                    -->
+<!-- ============================================================== -->
+<div id="controls">
+  <h1>SCALP DASHBOARD</h1>
+
+  <div class="param-group">
+    <label for="p-min-shares">Min Shares</label>
+    <input id="p-min-shares" type="number" min="1" step="1" value="100">
+  </div>
+  <div class="param-group">
+    <label for="p-count-win">Trade Count Window</label>
+    <input id="p-count-win" type="number" min="1" step="1" value="60">
+    <span class="unit">sec</span>
+  </div>
+  <div class="param-group">
+    <label for="p-std-win">StdDev Window</label>
+    <input id="p-std-win" type="number" min="0.5" step="0.5" value="5">
+    <span class="unit">min</span>
+  </div>
+  <div class="param-group">
+    <label for="p-trend-win">Trend Window</label>
+    <input id="p-trend-win" type="number" min="0.5" step="0.5" value="5">
+    <span class="unit">min</span>
+  </div>
+
+  <button id="btn-pause">Pause</button>
+  <span id="status-dot" title="WebSocket status"></span>
+  <span id="filter-help" title="Hover for filter syntax">[?]</span>
+  <span id="spacer"></span>
+  <span id="row-count"></span>
+</div>
+
+<!-- ============================================================== -->
+<!--  Data table                                                      -->
+<!-- ============================================================== -->
+<div id="table-wrap">
+<table>
+  <thead>
+    <tr id="header-row"></tr>
+    <tr id="filter-row" class="filter-row"></tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+</div>
+
+<!-- ============================================================== -->
+<!--  JavaScript                                                      -->
+<!-- ============================================================== -->
+<script>
+/* ------------------------------------------------------------------ */
+/*  Column definitions                                                 */
+/* ------------------------------------------------------------------ */
+const COLS = [
+  {key:'ticker',         label:'Ticker',          type:'text', align:'left'},
+  {key:'last_price',     label:'Last Price',       type:'num',  fmt:v=>v==null?'—':v.toFixed(2)},
+  {key:'trade_count',    label:'Trades / Win',     type:'num',  fmt:v=>v.toLocaleString()},
+  {key:'gap_std_dollar', label:'$ Gap StdDev',     type:'num',  fmt:v=>v.toFixed(4)},
+  {key:'gap_std_pct',    label:'% Gap StdDev',     type:'num',  fmt:v=>v.toFixed(4)},
+  {key:'trend',          label:'Trend ($/min)',     type:'num',  fmt:v=>v.toFixed(4)},
+  {key:'ratio',          label:'StdDev / Trend',   type:'num',  fmt:v=>v>=9999?'—':v.toFixed(2)},
+];
+
+/* ------------------------------------------------------------------ */
+/*  State                                                              */
+/* ------------------------------------------------------------------ */
+let ws = null;
+let rows = [];
+let sortCol = null;   // key string or null
+let sortDir = 0;      // 0 = none, 1 = asc, -1 = desc
+let filters = {};     // key → filter predicate function
+let isPaused = false;
+
+/* ------------------------------------------------------------------ */
+/*  DOM refs                                                           */
+/* ------------------------------------------------------------------ */
+const $headerRow  = document.getElementById('header-row');
+const $filterRow  = document.getElementById('filter-row');
+const $tbody      = document.getElementById('tbody');
+const $btnPause   = document.getElementById('btn-pause');
+const $statusDot  = document.getElementById('status-dot');
+const $rowCount   = document.getElementById('row-count');
+
+const $pMinShares = document.getElementById('p-min-shares');
+const $pCountWin  = document.getElementById('p-count-win');
+const $pStdWin    = document.getElementById('p-std-win');
+const $pTrendWin  = document.getElementById('p-trend-win');
+
+/* ------------------------------------------------------------------ */
+/*  Build table header + filter row                                    */
+/* ------------------------------------------------------------------ */
+function buildHeader() {
+  $headerRow.innerHTML = '';
+  $filterRow.innerHTML = '';
+  COLS.forEach(col => {
+    // sortable header
+    const th = document.createElement('th');
+    th.textContent = col.label;
+    th.dataset.key = col.key;
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    th.appendChild(arrow);
+    th.addEventListener('click', () => toggleSort(col.key));
+    $headerRow.appendChild(th);
+
+    // filter input
+    const fth = document.createElement('th');
+    const inp = document.createElement('input');
+    inp.placeholder = col.type === 'text' ? 'filter...' : '>  <  >=  ..';
+    inp.dataset.key = col.key;
+    inp.dataset.type = col.type;
+    inp.addEventListener('input', onFilterChange);
+    fth.appendChild(inp);
+    $filterRow.appendChild(fth);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sorting                                                            */
+/* ------------------------------------------------------------------ */
+function toggleSort(key) {
+  if (sortCol === key) {
+    sortDir = sortDir === 1 ? -1 : sortDir === -1 ? 0 : 1;
+  } else {
+    sortCol = key;
+    sortDir = 1;
+  }
+  if (sortDir === 0) sortCol = null;
+  updateSortIndicators();
+  render();
+}
+
+function updateSortIndicators() {
+  $headerRow.querySelectorAll('th').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    const arrow = th.querySelector('.arrow');
+    if (th.dataset.key === sortCol) {
+      th.classList.add(sortDir === 1 ? 'sorted-asc' : 'sorted-desc');
+      arrow.textContent = sortDir === 1 ? ' ▲' : ' ▼';
+    } else {
+      arrow.textContent = '';
+    }
+  });
+}
+
+function applySortToRows(arr) {
+  if (!sortCol || sortDir === 0) return arr;
+  return [...arr].sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') return sortDir * va.localeCompare(vb);
+    return sortDir * (va - vb);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Filtering                                                          */
+/* ------------------------------------------------------------------ */
+function parseFilterExpr(expr, type) {
+  expr = expr.trim();
+  if (!expr) return null;
+
+  if (type === 'text') {
+    const lower = expr.toLowerCase();
+    return v => String(v).toLowerCase().includes(lower);
+  }
+
+  // between: "10..50" or "-1..1"
+  if (expr.includes('..')) {
+    const parts = expr.split('..');
+    if (parts.length === 2) {
+      const a = parseFloat(parts[0]), b = parseFloat(parts[1]);
+      if (!isNaN(a) && !isNaN(b)) {
+        const lo = Math.min(a, b), hi = Math.max(a, b);
+        return v => v != null && v >= lo && v <= hi;
+      }
+    }
+  }
+
+  if (expr.startsWith('>=')) { const n = parseFloat(expr.slice(2)); return isNaN(n) ? null : v => v != null && v >= n; }
+  if (expr.startsWith('<=')) { const n = parseFloat(expr.slice(2)); return isNaN(n) ? null : v => v != null && v <= n; }
+  if (expr.startsWith('>'))  { const n = parseFloat(expr.slice(1)); return isNaN(n) ? null : v => v != null && v > n; }
+  if (expr.startsWith('<'))  { const n = parseFloat(expr.slice(1)); return isNaN(n) ? null : v => v != null && v < n; }
+
+  // bare number → exact match
+  const num = parseFloat(expr);
+  if (!isNaN(num)) return v => v != null && Math.abs(v - num) < 0.00005;
+
+  return null;
+}
+
+function onFilterChange(e) {
+  const key = e.target.dataset.key;
+  const type = e.target.dataset.type;
+  const pred = parseFilterExpr(e.target.value, type);
+  if (pred) {
+    filters[key] = pred;
+  } else {
+    delete filters[key];
+  }
+  render();
+}
+
+function applyFilters(arr) {
+  const keys = Object.keys(filters);
+  if (keys.length === 0) return arr;
+  return arr.filter(row => keys.every(k => filters[k](row[k])));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Render table body                                                  */
+/* ------------------------------------------------------------------ */
+function render() {
+  let visible = applyFilters(rows);
+  visible = applySortToRows(visible);
+
+  $rowCount.textContent = `Showing ${visible.length} / ${rows.length}`;
+
+  // build HTML in one shot for performance
+  let html = '';
+  for (const row of visible) {
+    html += '<tr class="data-row">';
+    for (const col of COLS) {
+      const raw = row[col.key];
+      let text = '';
+      let cls = '';
+      if (col.fmt) {
+        text = col.fmt(raw);
+      } else {
+        text = raw != null ? String(raw) : '—';
+      }
+
+      // colour coding
+      if (col.key === 'trend') {
+        cls = raw > 0.0001 ? 'pos' : raw < -0.0001 ? 'neg' : 'muted';
+      } else if (col.key === 'ratio') {
+        cls = raw >= 9999 ? 'muted' : raw >= 50 ? 'highlight' : '';
+      } else if (col.key === 'trade_count') {
+        cls = raw === 0 ? 'muted' : '';
+      } else if (col.key === 'gap_std_dollar' || col.key === 'gap_std_pct') {
+        cls = raw === 0 ? 'muted' : '';
+      }
+
+      const align = col.align === 'left' ? ' style="text-align:left"' : '';
+      html += `<td class="${cls}"${align}>${text}</td>`;
+    }
+    html += '</tr>';
+  }
+  $tbody.innerHTML = html;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Parameter controls                                                 */
+/* ------------------------------------------------------------------ */
+function sendParams() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    type: 'params',
+    params: {
+      min_shares:       parseFloat($pMinShares.value) || 100,
+      count_window_sec: parseFloat($pCountWin.value)  || 60,
+      std_window_min:   parseFloat($pStdWin.value)    || 5,
+      trend_window_min: parseFloat($pTrendWin.value)  || 5,
+    }
+  }));
+}
+
+// debounce param changes (300ms)
+let paramTimer = null;
+function onParamInput() {
+  clearTimeout(paramTimer);
+  paramTimer = setTimeout(sendParams, 300);
+}
+$pMinShares.addEventListener('input', onParamInput);
+$pCountWin.addEventListener('input', onParamInput);
+$pStdWin.addEventListener('input', onParamInput);
+$pTrendWin.addEventListener('input', onParamInput);
+
+/* ------------------------------------------------------------------ */
+/*  Pause / Resume                                                     */
+/* ------------------------------------------------------------------ */
+$btnPause.addEventListener('click', () => {
+  isPaused = !isPaused;
+  $btnPause.textContent = isPaused ? 'Resume' : 'Pause';
+  $btnPause.classList.toggle('paused', isPaused);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'pause', paused: isPaused }));
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/*  WebSocket connection                                               */
+/* ------------------------------------------------------------------ */
+function connect() {
+  $statusDot.className = 'connecting';
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    $statusDot.className = 'connected';
+    console.log('[WS] Connected');
+  };
+
+  ws.onclose = () => {
+    $statusDot.className = '';
+    console.log('[WS] Disconnected — reconnecting in 2 s');
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = (e) => {
+    console.error('[WS] Error', e);
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === 'init') {
+      // populate controls from server state
+      $pMinShares.value = msg.params.min_shares;
+      $pCountWin.value  = msg.params.count_window_sec;
+      $pStdWin.value    = msg.params.std_window_min;
+      $pTrendWin.value  = msg.params.trend_window_min;
+      isPaused = msg.paused;
+      $btnPause.textContent = isPaused ? 'Resume' : 'Pause';
+      $btnPause.classList.toggle('paused', isPaused);
+      if (msg.demo) {
+        document.title = 'Scalp Dashboard (DEMO)';
+      }
+    }
+
+    if (msg.type === 'update') {
+      rows = msg.rows || [];
+      render();
+    }
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Boot                                                               */
+/* ------------------------------------------------------------------ */
+buildHeader();
+connect();
+</script>
+</body>
+</html>

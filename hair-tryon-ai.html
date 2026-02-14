@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Hair Try-On - Photorealistic</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .api-notice {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        main {
+            flex: 1;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .screen {
+            display: none;
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .welcome-content {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .icon-large {
+            font-size: 5rem;
+            margin-bottom: 20px;
+        }
+
+        .welcome-content h2 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .welcome-content > p {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .api-key-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .api-key-section h3 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .api-key-section p {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .api-key-section ol {
+            margin-left: 20px;
+            margin-bottom: 15px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .api-key-section li {
+            margin-bottom: 8px;
+        }
+
+        .api-key-section a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .api-key-section a:hover {
+            text-decoration: underline;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: monospace;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .saved-key {
+            display: none;
+            padding: 10px;
+            background: #d4edda;
+            color: #155724;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .saved-key.show {
+            display: block;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #dee2e6;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+
+        .loading-message {
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto 20px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        .camera-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .btn-capture {
+            background: white;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 5px solid #667eea;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .capture-circle {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 3px solid #667eea;
+            border-radius: 50%;
+        }
+
+        .placeholder {
+            width: 80px;
+        }
+
+        .editor-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .comparison-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .image-box {
+            background: #f8f9fa;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .image-box h4 {
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .image-box canvas,
+        .image-box img {
+            width: 100%;
+            display: block;
+        }
+
+        .processing-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            display: none;
+        }
+
+        .processing-overlay.active {
+            display: flex;
+        }
+
+        .processing-overlay .spinner {
+            width: 60px;
+            height: 60px;
+            border-width: 4px;
+            margin-bottom: 15px;
+        }
+
+        .processing-overlay p {
+            font-size: 1rem;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .status-message {
+            padding: 15px;
+            text-align: center;
+            font-weight: 500;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-message.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .style-controls {
+            margin-bottom: 20px;
+        }
+
+        .style-controls h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section h4 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .button-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .style-btn {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .style-btn:hover {
+            background: #e9ecef;
+        }
+
+        .style-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .editor-actions .btn {
+            flex: 1;
+            justify-content: center;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-container {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .screen {
+                padding: 20px;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI Hair Try-On</h1>
+            <p class="subtitle">Photorealistic hair transformation using Stable Diffusion AI</p>
+            <div class="api-notice">
+                ⚡ Powered by real AI image generation models
+            </div>
+        </header>
+
+        <main>
+            <!-- Welcome Screen -->
+            <div id="welcomeScreen" class="screen active">
+                <div class="welcome-content">
+                    <div class="icon-large">✨</div>
+                    <h2>Photorealistic AI Hair Try-On</h2>
+                    <p>Transform your hair with actual AI-generated photorealistic results!</p>
+
+                    <div class="api-key-section">
+                        <h3>🔑 Setup Required</h3>
+                        <p>To use photorealistic AI, you need a free API key from one of these services:</p>
+
+                        <div style="margin-bottom: 20px;">
+                            <strong>Option 1: Replicate (Recommended)</strong>
+                            <ol>
+                                <li>Go to <a href="https://replicate.com" target="_blank">replicate.com</a></li>
+                                <li>Sign up for free account</li>
+                                <li>Get your API token from account settings</li>
+                                <li>Paste it below</li>
+                            </ol>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <strong>Option 2: Hugging Face</strong>
+                            <ol>
+                                <li>Go to <a href="https://huggingface.co" target="_blank">huggingface.co</a></li>
+                                <li>Sign up and create an access token</li>
+                                <li>Paste it below</li>
+                            </ol>
+                        </div>
+
+                        <div class="saved-key" id="savedKeyNotice">
+                            ✓ API key saved! You're ready to go.
+                        </div>
+
+                        <div class="input-group">
+                            <select id="apiProvider" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; font-size: 1rem;">
+                                <option value="replicate">Replicate</option>
+                                <option value="huggingface">Hugging Face</option>
+                            </select>
+                            <input type="password" id="apiKeyInput" placeholder="Paste your API key here..." />
+                            <button id="saveApiKey" class="btn btn-primary btn-small">Save</button>
+                        </div>
+
+                        <p style="font-size: 0.85rem; color: #999; margin-top: 10px;">
+                            🔒 Your API key is stored locally in your browser only
+                        </p>
+                    </div>
+
+                    <div class="features">
+                        <div class="feature">
+                            <span class="feature-icon">🎨</span>
+                            <span>Photorealistic AI</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">💇</span>
+                            <span>Natural hairstyles</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">🌈</span>
+                            <span>Any color</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">⚡</span>
+                            <span>30-60 sec processing</span>
+                        </div>
+                    </div>
+
+                    <button id="startButton" class="btn btn-primary" disabled>
+                        <span>📷</span> Take Selfie
+                    </button>
+
+                    <div id="loadingMessage" class="loading-message" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Loading face detection models...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Screen -->
+            <div id="cameraScreen" class="screen">
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                </div>
+
+                <div class="camera-controls">
+                    <button id="cancelButton" class="btn btn-secondary">
+                        <span>❌</span> Cancel
+                    </button>
+                    <button id="captureButton" class="btn btn-capture">
+                        <span class="capture-circle"></span>
+                    </button>
+                    <div class="placeholder"></div>
+                </div>
+            </div>
+
+            <!-- Editor Screen -->
+            <div id="editorScreen" class="screen">
+                <div class="editor-container">
+                    <div id="detectionStatus" class="status-message"></div>
+
+                    <div class="comparison-container">
+                        <div class="image-box">
+                            <h4>Original Photo</h4>
+                            <canvas id="originalCanvas"></canvas>
+                        </div>
+                        <div class="image-box">
+                            <h4>AI Generated Result</h4>
+                            <img id="resultImage" style="display: none;" />
+                            <canvas id="placeholderCanvas"></canvas>
+                            <div id="processingOverlay" class="processing-overlay">
+                                <div class="spinner"></div>
+                                <p id="processingText">Generating photorealistic hair...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="styleControls" class="style-controls" style="display: none;">
+                        <h3>Choose Your Hair Transformation</h3>
+
+                        <div class="control-section">
+                            <h4>Hair Style & Color</h4>
+                            <div id="styleButtons" class="button-grid"></div>
+                        </div>
+
+                        <button id="generateButton" class="btn btn-primary" style="width: 100%; margin-top: 15px;">
+                            <span>✨</span> Generate AI Hair
+                        </button>
+                    </div>
+
+                    <div class="editor-actions">
+                        <button id="newPhotoButton" class="btn btn-secondary">
+                            <span>🔄</span> New Photo
+                        </button>
+                        <button id="saveButton" class="btn btn-primary" style="display: none;">
+                            <span>💾</span> Save Result
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Stable Diffusion AI • True photorealistic results</p>
+        </footer>
+    </div>
+
+    <script>
+        class PhotorealisticHairApp {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.originalCanvas = document.getElementById('originalCanvas');
+                this.placeholderCanvas = document.getElementById('placeholderCanvas');
+                this.resultImage = document.getElementById('resultImage');
+
+                this.stream = null;
+                this.capturedImage = null;
+                this.apiKey = localStorage.getItem('hairAI_apiKey');
+                this.apiProvider = localStorage.getItem('hairAI_provider') || 'replicate';
+                this.modelsLoaded = false;
+
+                this.selectedStyle = 'long blonde';
+
+                this.hairStyles = [
+                    { id: 'long-blonde', label: 'Long Blonde', prompt: 'long flowing blonde hair' },
+                    { id: 'short-brown', label: 'Short Brown', prompt: 'short brown pixie cut hair' },
+                    { id: 'curly-black', label: 'Curly Black', prompt: 'curly voluminous black hair' },
+                    { id: 'bob-red', label: 'Bob Red', prompt: 'sleek red bob hairstyle' },
+                    { id: 'wavy-auburn', label: 'Wavy Auburn', prompt: 'wavy shoulder-length auburn hair' },
+                    { id: 'platinum', label: 'Platinum', prompt: 'platinum blonde short hair' },
+                    { id: 'afro', label: 'Natural Afro', prompt: 'natural textured afro hairstyle' },
+                    { id: 'pink-long', label: 'Pink Long', prompt: 'long vibrant pink hair' },
+                    { id: 'blue-short', label: 'Blue Short', prompt: 'short electric blue hair' },
+                    { id: 'purple-wavy', label: 'Purple Wavy', prompt: 'wavy purple ombre hair' },
+                    { id: 'silver', label: 'Silver Gray', prompt: 'stylish silver gray hair' },
+                    { id: 'balayage', label: 'Balayage', prompt: 'balayage highlights long hair' }
+                ];
+
+                this.init();
+            }
+
+            async init() {
+                this.setupEventListeners();
+                this.checkApiKey();
+                await this.loadModels();
+            }
+
+            checkApiKey() {
+                if (this.apiKey) {
+                    document.getElementById('savedKeyNotice').classList.add('show');
+                    document.getElementById('startButton').disabled = false;
+                    document.getElementById('apiKeyInput').value = '••••••••••••••••';
+                    document.getElementById('apiProvider').value = this.apiProvider;
+                }
+            }
+
+            setupEventListeners() {
+                document.getElementById('saveApiKey').addEventListener('click', () => this.saveApiKey());
+                document.getElementById('startButton').addEventListener('click', () => this.startCamera());
+                document.getElementById('cancelButton').addEventListener('click', () => this.cancelCamera());
+                document.getElementById('captureButton').addEventListener('click', () => this.capturePhoto());
+                document.getElementById('newPhotoButton').addEventListener('click', () => this.reset());
+                document.getElementById('saveButton').addEventListener('click', () => this.savePhoto());
+                document.getElementById('generateButton').addEventListener('click', () => this.generateAIHair());
+            }
+
+            saveApiKey() {
+                const key = document.getElementById('apiKeyInput').value.trim();
+                const provider = document.getElementById('apiProvider').value;
+
+                if (key && key !== '••••••••••••••••') {
+                    this.apiKey = key;
+                    this.apiProvider = provider;
+                    localStorage.setItem('hairAI_apiKey', key);
+                    localStorage.setItem('hairAI_provider', provider);
+                    document.getElementById('savedKeyNotice').classList.add('show');
+                    document.getElementById('startButton').disabled = false;
+                    document.getElementById('apiKeyInput').value = '••••••••••••••••';
+
+                    const statusDiv = document.createElement('div');
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = '✓ API key saved successfully!';
+                    statusDiv.style.marginTop = '10px';
+                    document.querySelector('.api-key-section').appendChild(statusDiv);
+                    setTimeout(() => statusDiv.remove(), 3000);
+                }
+            }
+
+            async loadModels() {
+                const loadingMessage = document.getElementById('loadingMessage');
+                loadingMessage.style.display = 'block';
+
+                try {
+                    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+
+                    this.modelsLoaded = true;
+                    loadingMessage.style.display = 'none';
+                    console.log('Face detection models loaded');
+                } catch (error) {
+                    console.error('Error loading models:', error);
+                    loadingMessage.innerHTML = '<p style="color: red;">Error loading models. Please refresh.</p>';
+                }
+            }
+
+            async startCamera() {
+                if (!this.modelsLoaded) {
+                    alert('Please wait for face detection models to load');
+                    return;
+                }
+
+                if (!this.apiKey) {
+                    alert('Please enter your API key first');
+                    return;
+                }
+
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+                    });
+
+                    this.video.srcObject = this.stream;
+                    this.showScreen('cameraScreen');
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    alert('Could not access camera. Please grant camera permissions.');
+                }
+            }
+
+            cancelCamera() {
+                this.stopCamera();
+                this.showScreen('welcomeScreen');
+            }
+
+            stopCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+            }
+
+            async capturePhoto() {
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = this.video.videoWidth;
+                captureCanvas.height = this.video.videoHeight;
+                const ctx = captureCanvas.getContext('2d');
+
+                ctx.save();
+                ctx.scale(-1, 1);
+                ctx.drawImage(this.video, -captureCanvas.width, 0, captureCanvas.width, captureCanvas.height);
+                ctx.restore();
+
+                this.capturedImage = captureCanvas;
+                this.stopCamera();
+
+                await this.detectFace();
+                this.showEditor();
+            }
+
+            async detectFace() {
+                const statusDiv = document.getElementById('detectionStatus');
+                statusDiv.className = 'status-message info';
+                statusDiv.textContent = 'Detecting face...';
+
+                try {
+                    const detections = await faceapi
+                        .detectSingleFace(this.capturedImage, new faceapi.TinyFaceDetectorOptions())
+                        .withFaceLandmarks();
+
+                    if (detections) {
+                        statusDiv.className = 'status-message success';
+                        statusDiv.textContent = '✓ Face detected! Choose a hairstyle and click Generate';
+                        document.getElementById('styleControls').style.display = 'block';
+                        this.renderStyleButtons();
+                    } else {
+                        statusDiv.className = 'status-message error';
+                        statusDiv.textContent = '✗ No face detected. Try another photo with better lighting.';
+                        document.getElementById('styleControls').style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error detecting face:', error);
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '✗ Error detecting face. Please try again.';
+                }
+            }
+
+            showEditor() {
+                this.showScreen('editorScreen');
+
+                // Show original
+                this.originalCanvas.width = this.capturedImage.width;
+                this.originalCanvas.height = this.capturedImage.height;
+                const ctx = this.originalCanvas.getContext('2d');
+                ctx.drawImage(this.capturedImage, 0, 0);
+
+                // Show placeholder
+                this.placeholderCanvas.width = this.capturedImage.width;
+                this.placeholderCanvas.height = this.capturedImage.height;
+                const pCtx = this.placeholderCanvas.getContext('2d');
+                pCtx.fillStyle = '#f0f0f0';
+                pCtx.fillRect(0, 0, this.capturedImage.width, this.capturedImage.height);
+                pCtx.fillStyle = '#999';
+                pCtx.font = '20px sans-serif';
+                pCtx.textAlign = 'center';
+                pCtx.fillText('Choose style & click Generate', this.capturedImage.width / 2, this.capturedImage.height / 2);
+            }
+
+            renderStyleButtons() {
+                const container = document.getElementById('styleButtons');
+                container.innerHTML = '';
+
+                this.hairStyles.forEach(style => {
+                    const btn = document.createElement('button');
+                    btn.className = 'style-btn';
+                    btn.textContent = style.label;
+                    if (style.id === 'long-blonde') {
+                        btn.classList.add('active');
+                    }
+                    btn.addEventListener('click', () => {
+                        this.selectedStyle = style.id;
+                        document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    });
+                    container.appendChild(btn);
+                });
+            }
+
+            async generateAIHair() {
+                const selectedStyleObj = this.hairStyles.find(s => s.id === this.selectedStyle);
+                if (!selectedStyleObj) return;
+
+                const overlay = document.getElementById('processingOverlay');
+                const processingText = document.getElementById('processingText');
+
+                overlay.classList.add('active');
+                processingText.textContent = 'Generating photorealistic hair with AI...';
+
+                try {
+                    // Convert canvas to blob
+                    const blob = await new Promise(resolve => {
+                        this.capturedImage.toBlob(resolve, 'image/jpeg', 0.95);
+                    });
+
+                    // Call AI API
+                    let resultUrl;
+                    if (this.apiProvider === 'replicate') {
+                        resultUrl = await this.generateWithReplicate(blob, selectedStyleObj.prompt);
+                    } else {
+                        resultUrl = await this.generateWithHuggingFace(blob, selectedStyleObj.prompt);
+                    }
+
+                    // Show result
+                    this.resultImage.src = resultUrl;
+                    this.resultImage.style.display = 'block';
+                    this.placeholderCanvas.style.display = 'none';
+                    overlay.classList.remove('active');
+
+                    document.getElementById('saveButton').style.display = 'inline-flex';
+
+                    const statusDiv = document.getElementById('detectionStatus');
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = '✓ AI generation complete! Your photorealistic result is ready.';
+
+                } catch (error) {
+                    console.error('Error generating:', error);
+                    overlay.classList.remove('active');
+
+                    const statusDiv = document.getElementById('detectionStatus');
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '✗ Error: ' + error.message;
+                }
+            }
+
+            async generateWithReplicate(imageBlob, hairPrompt) {
+                // Convert blob to base64
+                const base64 = await this.blobToBase64(imageBlob);
+
+                const prompt = `portrait photo of a person with ${hairPrompt}, professional photography, natural lighting, high quality, photorealistic`;
+
+                const response = await fetch('https://api.replicate.com/v1/predictions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${this.apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        version: 'stability-ai/stable-diffusion:ac732df83cea7fff18b8472768c88ad041fa750ff7682a21affe81863cbe77e4',
+                        input: {
+                            prompt: prompt,
+                            image: base64,
+                            num_inference_steps: 50,
+                            guidance_scale: 7.5,
+                            strength: 0.6
+                        }
+                    })
+                });
+
+                const prediction = await response.json();
+
+                if (prediction.error) {
+                    throw new Error(prediction.error);
+                }
+
+                // Poll for result
+                return await this.pollReplicateResult(prediction.id);
+            }
+
+            async pollReplicateResult(predictionId) {
+                const maxAttempts = 60;
+                let attempts = 0;
+
+                while (attempts < maxAttempts) {
+                    const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+                        headers: { 'Authorization': `Token ${this.apiKey}` }
+                    });
+
+                    const result = await response.json();
+
+                    if (result.status === 'succeeded') {
+                        return result.output[0];
+                    } else if (result.status === 'failed') {
+                        throw new Error('AI generation failed');
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    attempts++;
+
+                    document.getElementById('processingText').textContent =
+                        `Generating... (${attempts * 2}s)`;
+                }
+
+                throw new Error('Generation timeout');
+            }
+
+            async generateWithHuggingFace(imageBlob, hairPrompt) {
+                const prompt = `portrait of person with ${hairPrompt}, photorealistic, professional photo`;
+
+                const formData = new FormData();
+                formData.append('file', imageBlob);
+
+                const response = await fetch(
+                    'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.apiKey}`
+                        },
+                        body: formData
+                    }
+                );
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'API error');
+                }
+
+                const blob = await response.blob();
+                return URL.createObjectURL(blob);
+            }
+
+            blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            savePhoto() {
+                const link = document.createElement('a');
+                link.download = `ai-hair-${Date.now()}.jpg`;
+                link.href = this.resultImage.src;
+                link.click();
+            }
+
+            reset() {
+                this.capturedImage = null;
+                this.resultImage.style.display = 'none';
+                this.placeholderCanvas.style.display = 'block';
+                document.getElementById('styleControls').style.display = 'none';
+                document.getElementById('saveButton').style.display = 'none';
+                this.showScreen('welcomeScreen');
+            }
+
+            showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                document.getElementById(screenId).classList.add('active');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new PhotorealisticHairApp();
+        });
+    </script>
+</body>
+</html>

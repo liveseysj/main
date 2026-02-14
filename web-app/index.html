@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hair Try-On App</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💇 Hair Try-On</h1>
+            <p class="subtitle">Take a selfie and try different hairstyles!</p>
+        </header>
+
+        <main>
+            <!-- Welcome Screen -->
+            <div id="welcomeScreen" class="screen active">
+                <div class="welcome-content">
+                    <div class="icon-large">📸</div>
+                    <h2>Welcome to Hair Try-On</h2>
+                    <p>Take a selfie and see yourself with different hairstyles and colors!</p>
+
+                    <div class="features">
+                        <div class="feature">
+                            <span class="feature-icon">✂️</span>
+                            <span>10+ hairstyles</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">🎨</span>
+                            <span>12+ color options</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">🤖</span>
+                            <span>AI face detection</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">💾</span>
+                            <span>Save your looks</span>
+                        </div>
+                    </div>
+
+                    <button id="startButton" class="btn btn-primary">
+                        <span>📷</span> Take Selfie
+                    </button>
+
+                    <div id="loadingMessage" class="loading-message" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Loading face detection models...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Screen -->
+            <div id="cameraScreen" class="screen">
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="overlay"></canvas>
+                </div>
+
+                <div class="camera-controls">
+                    <button id="cancelButton" class="btn btn-secondary">
+                        <span>❌</span> Cancel
+                    </button>
+                    <button id="captureButton" class="btn btn-capture">
+                        <span class="capture-circle"></span>
+                    </button>
+                    <div class="placeholder"></div>
+                </div>
+            </div>
+
+            <!-- Editor Screen -->
+            <div id="editorScreen" class="screen">
+                <div class="editor-container">
+                    <div class="preview-container">
+                        <canvas id="previewCanvas"></canvas>
+                        <div id="detectionStatus" class="status-message"></div>
+                    </div>
+
+                    <div id="styleControls" class="style-controls" style="display: none;">
+                        <h3>Choose Your Style</h3>
+
+                        <div class="control-section">
+                            <h4>Hair Style</h4>
+                            <div id="styleButtons" class="button-grid"></div>
+                        </div>
+
+                        <div class="control-section">
+                            <h4>Hair Color</h4>
+                            <div id="colorButtons" class="color-grid"></div>
+                        </div>
+
+                        <div id="currentStyle" class="current-style" style="display: none;">
+                            <span id="currentStyleText"></span>
+                            <button id="resetButton" class="btn-link">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="editor-actions">
+                        <button id="newPhotoButton" class="btn btn-secondary">
+                            <span>🔄</span> New Photo
+                        </button>
+                        <button id="saveButton" class="btn btn-primary" style="display: none;">
+                            <span>💾</span> Save Photo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Works best with good lighting and facing the camera directly</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

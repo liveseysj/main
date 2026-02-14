@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hair Try-On App - Realistic AI</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        main {
+            flex: 1;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .screen {
+            display: none;
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .welcome-content {
+            text-align: center;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .icon-large {
+            font-size: 5rem;
+            margin-bottom: 20px;
+        }
+
+        .welcome-content h2 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .welcome-content > p {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #dee2e6;
+        }
+
+        .btn-link {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 0.9rem;
+            padding: 5px;
+        }
+
+        .loading-message {
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto 20px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: scaleX(-1);
+        }
+
+        .camera-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .btn-capture {
+            background: white;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 5px solid #667eea;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .capture-circle {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 3px solid #667eea;
+            border-radius: 50%;
+        }
+
+        .placeholder {
+            width: 80px;
+        }
+
+        .editor-container {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .preview-container {
+            position: relative;
+            background: #f8f9fa;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        #previewCanvas {
+            width: 100%;
+            display: block;
+        }
+
+        .status-message {
+            padding: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .style-controls {
+            margin-bottom: 20px;
+        }
+
+        .style-controls h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section h4 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .button-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .style-btn {
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .style-btn:hover {
+            background: #e9ecef;
+        }
+
+        .style-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .color-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .color-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .color-btn:hover {
+            background: #e9ecef;
+        }
+
+        .color-btn.active {
+            border-color: #667eea;
+            background: #e7e9fc;
+        }
+
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .current-style {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .editor-actions .btn {
+            flex: 1;
+            justify-content: center;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .screen {
+                padding: 20px;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+
+            .welcome-content h2 {
+                font-size: 1.5rem;
+            }
+
+            .btn {
+                padding: 12px 24px;
+                font-size: 1rem;
+            }
+
+            .camera-controls {
+                padding: 0 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .icon-large {
+                font-size: 3rem;
+            }
+
+            .editor-actions {
+                flex-direction: column;
+            }
+
+            .button-grid, .color-grid {
+                gap: 6px;
+            }
+
+            .style-btn, .color-btn {
+                font-size: 0.85rem;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💇 Hair Try-On AI</h1>
+            <p class="subtitle">Realistic hair rendering with AI</p>
+        </header>
+
+        <main>
+            <!-- Welcome Screen -->
+            <div id="welcomeScreen" class="screen active">
+                <div class="welcome-content">
+                    <div class="icon-large">📸</div>
+                    <h2>Welcome to Hair Try-On</h2>
+                    <p>Take a selfie and see yourself with realistic hairstyles and colors!</p>
+
+                    <div class="features">
+                        <div class="feature">
+                            <span class="feature-icon">✂️</span>
+                            <span>10+ hairstyles</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">🎨</span>
+                            <span>12+ color options</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">🤖</span>
+                            <span>AI face detection</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">✨</span>
+                            <span>Realistic rendering</span>
+                        </div>
+                    </div>
+
+                    <button id="startButton" class="btn btn-primary">
+                        <span>📷</span> Take Selfie
+                    </button>
+
+                    <div id="loadingMessage" class="loading-message" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Loading face detection models...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Screen -->
+            <div id="cameraScreen" class="screen">
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="overlay"></canvas>
+                </div>
+
+                <div class="camera-controls">
+                    <button id="cancelButton" class="btn btn-secondary">
+                        <span>❌</span> Cancel
+                    </button>
+                    <button id="captureButton" class="btn btn-capture">
+                        <span class="capture-circle"></span>
+                    </button>
+                    <div class="placeholder"></div>
+                </div>
+            </div>
+
+            <!-- Editor Screen -->
+            <div id="editorScreen" class="screen">
+                <div class="editor-container">
+                    <div class="preview-container">
+                        <canvas id="previewCanvas"></canvas>
+                        <div id="detectionStatus" class="status-message"></div>
+                    </div>
+
+                    <div id="styleControls" class="style-controls" style="display: none;">
+                        <h3>Choose Your Style</h3>
+
+                        <div class="control-section">
+                            <h4>Hair Style</h4>
+                            <div id="styleButtons" class="button-grid"></div>
+                        </div>
+
+                        <div class="control-section">
+                            <h4>Hair Color</h4>
+                            <div id="colorButtons" class="color-grid"></div>
+                        </div>
+
+                        <div id="currentStyle" class="current-style" style="display: none;">
+                            <span id="currentStyleText"></span>
+                            <button id="resetButton" class="btn-link">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="editor-actions">
+                        <button id="newPhotoButton" class="btn btn-secondary">
+                            <span>🔄</span> New Photo
+                        </button>
+                        <button id="saveButton" class="btn btn-primary" style="display: none;">
+                            <span>💾</span> Save Photo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Realistic AI-enhanced hair rendering • Works best with good lighting</p>
+        </footer>
+    </div>
+
+    <script>
+        // Realistic Hair Try-On App with AI-Enhanced Rendering
+        class HairTryOnApp {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('overlay');
+                this.previewCanvas = document.getElementById('previewCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.previewCtx = this.previewCanvas.getContext('2d');
+
+                this.stream = null;
+                this.capturedImage = null;
+                this.detectedFace = null;
+                this.modelsLoaded = false;
+
+                this.selectedStyle = 'long';
+                this.selectedColor = 'brown';
+
+                this.hairStyles = [
+                    'long', 'short', 'bob', 'pixie', 'curly',
+                    'wavy', 'straight', 'afro', 'buzz', 'mohawk'
+                ];
+
+                this.hairColors = {
+                    black: { base: '#1a1a1a', highlight: '#3d3d3d', shadow: '#000000' },
+                    brown: { base: '#4A2511', highlight: '#7a4520', shadow: '#2a1508' },
+                    blonde: { base: '#FAD787', highlight: '#fff5d4', shadow: '#c9a857' },
+                    red: { base: '#B71C1C', highlight: '#e53935', shadow: '#7f0000' },
+                    auburn: { base: '#8B4000', highlight: '#b8642a', shadow: '#5c2a00' },
+                    platinum: { base: '#E8E8E8', highlight: '#ffffff', shadow: '#c0c0c0' },
+                    pink: { base: '#FF69B4', highlight: '#ffb6d9', shadow: '#c9418a' },
+                    blue: { base: '#1976D2', highlight: '#42a5f5', shadow: '#0d47a1' },
+                    purple: { base: '#9C27B0', highlight: '#ba68c8', shadow: '#6a1b9a' },
+                    green: { base: '#388E3C', highlight: '#66bb6a', shadow: '#1b5e20' },
+                    silver: { base: '#B0B0B0', highlight: '#d5d5d5', shadow: '#808080' },
+                    rainbow: { base: '#9C27B0', highlight: '#ff69b4', shadow: '#1976D2' }
+                };
+
+                this.init();
+            }
+
+            async init() {
+                this.setupEventListeners();
+                await this.loadModels();
+            }
+
+            async loadModels() {
+                const loadingMessage = document.getElementById('loadingMessage');
+                loadingMessage.style.display = 'block';
+
+                try {
+                    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+
+                    this.modelsLoaded = true;
+                    loadingMessage.style.display = 'none';
+                    console.log('Face detection models loaded');
+                } catch (error) {
+                    console.error('Error loading models:', error);
+                    loadingMessage.innerHTML = '<p style="color: red;">Error loading face detection models. Please check your internet connection and refresh the page.</p>';
+                }
+            }
+
+            setupEventListeners() {
+                document.getElementById('startButton').addEventListener('click', () => this.startCamera());
+                document.getElementById('cancelButton').addEventListener('click', () => this.cancelCamera());
+                document.getElementById('captureButton').addEventListener('click', () => this.capturePhoto());
+                document.getElementById('newPhotoButton').addEventListener('click', () => this.reset());
+                document.getElementById('saveButton').addEventListener('click', () => this.savePhoto());
+                document.getElementById('resetButton').addEventListener('click', () => this.resetStyle());
+            }
+
+            async startCamera() {
+                if (!this.modelsLoaded) {
+                    alert('Please wait for face detection models to load');
+                    return;
+                }
+
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'user',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        }
+                    });
+
+                    this.video.srcObject = this.stream;
+                    this.showScreen('cameraScreen');
+
+                    this.video.addEventListener('loadedmetadata', () => {
+                        this.canvas.width = this.video.videoWidth;
+                        this.canvas.height = this.video.videoHeight;
+                    });
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    alert('Could not access camera. Please make sure you have granted camera permissions.');
+                }
+            }
+
+            cancelCamera() {
+                this.stopCamera();
+                this.showScreen('welcomeScreen');
+            }
+
+            stopCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+            }
+
+            async capturePhoto() {
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = this.video.videoWidth;
+                captureCanvas.height = this.video.videoHeight;
+                const captureCtx = captureCanvas.getContext('2d');
+
+                captureCtx.save();
+                captureCtx.scale(-1, 1);
+                captureCtx.drawImage(this.video, -captureCanvas.width, 0, captureCanvas.width, captureCanvas.height);
+                captureCtx.restore();
+
+                this.capturedImage = captureCanvas;
+                this.stopCamera();
+
+                await this.detectFace();
+                this.showEditor();
+            }
+
+            async detectFace() {
+                const statusDiv = document.getElementById('detectionStatus');
+                statusDiv.className = 'status-message info';
+                statusDiv.textContent = 'Detecting face...';
+
+                try {
+                    const detections = await faceapi
+                        .detectSingleFace(this.capturedImage, new faceapi.TinyFaceDetectorOptions())
+                        .withFaceLandmarks();
+
+                    if (detections) {
+                        this.detectedFace = detections;
+                        statusDiv.className = 'status-message success';
+                        statusDiv.textContent = '✓ Face detected! Choose a hairstyle below';
+                        document.getElementById('styleControls').style.display = 'block';
+                        this.renderStyleButtons();
+                        this.renderColorButtons();
+                        this.applyHairStyle();
+                    } else {
+                        this.detectedFace = null;
+                        statusDiv.className = 'status-message error';
+                        statusDiv.textContent = '✗ No face detected. Try taking another photo with better lighting.';
+                        document.getElementById('styleControls').style.display = 'none';
+                        this.drawPreview();
+                    }
+                } catch (error) {
+                    console.error('Error detecting face:', error);
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '✗ Error detecting face. Please try again.';
+                    this.drawPreview();
+                }
+            }
+
+            showEditor() {
+                this.showScreen('editorScreen');
+            }
+
+            renderStyleButtons() {
+                const container = document.getElementById('styleButtons');
+                container.innerHTML = '';
+
+                this.hairStyles.forEach(style => {
+                    const btn = document.createElement('button');
+                    btn.className = 'style-btn';
+                    btn.textContent = this.capitalize(style);
+                    if (style === this.selectedStyle) {
+                        btn.classList.add('active');
+                    }
+                    btn.addEventListener('click', () => {
+                        this.selectedStyle = style;
+                        this.renderStyleButtons();
+                        this.applyHairStyle();
+                    });
+                    container.appendChild(btn);
+                });
+            }
+
+            renderColorButtons() {
+                const container = document.getElementById('colorButtons');
+                container.innerHTML = '';
+
+                Object.keys(this.hairColors).forEach(colorName => {
+                    const btn = document.createElement('button');
+                    btn.className = 'color-btn';
+                    if (colorName === this.selectedColor) {
+                        btn.classList.add('active');
+                    }
+
+                    const swatch = document.createElement('span');
+                    swatch.className = 'color-swatch';
+                    swatch.style.background = this.hairColors[colorName].base;
+
+                    const label = document.createElement('span');
+                    label.textContent = this.capitalize(colorName);
+
+                    btn.appendChild(swatch);
+                    btn.appendChild(label);
+
+                    btn.addEventListener('click', () => {
+                        this.selectedColor = colorName;
+                        this.renderColorButtons();
+                        this.applyHairStyle();
+                    });
+
+                    container.appendChild(btn);
+                });
+            }
+
+            applyHairStyle() {
+                if (!this.detectedFace) {
+                    this.drawPreview();
+                    return;
+                }
+
+                this.previewCanvas.width = this.capturedImage.width;
+                this.previewCanvas.height = this.capturedImage.height;
+
+                this.previewCtx.drawImage(this.capturedImage, 0, 0);
+
+                const landmarks = this.detectedFace.landmarks;
+                const hairRegion = this.calculateHairRegion(landmarks);
+
+                this.drawRealisticHair(hairRegion);
+
+                document.getElementById('saveButton').style.display = 'inline-flex';
+
+                const currentStyleDiv = document.getElementById('currentStyle');
+                const currentStyleText = document.getElementById('currentStyleText');
+                currentStyleDiv.style.display = 'flex';
+                currentStyleText.textContent = `Current: ${this.capitalize(this.selectedColor)} ${this.capitalize(this.selectedStyle)}`;
+            }
+
+            calculateHairRegion(landmarks) {
+                const jawline = landmarks.getJawOutline();
+                const topOfHead = jawline[Math.floor(jawline.length / 2)];
+
+                let leftMost = jawline[0];
+                let rightMost = jawline[jawline.length - 1];
+
+                jawline.forEach(point => {
+                    if (point.x < leftMost.x) leftMost = point;
+                    if (point.x > rightMost.x) rightMost = point;
+                });
+
+                const width = (rightMost.x - leftMost.x) * 1.3;
+                const height = width * 0.9;
+                const centerX = (leftMost.x + rightMost.x) / 2;
+
+                return {
+                    x: centerX - width / 2,
+                    y: topOfHead.y - height * 0.9,
+                    width: width,
+                    height: height,
+                    landmarks: landmarks
+                };
+            }
+
+            // REALISTIC HAIR RENDERING
+            drawRealisticHair(region) {
+                const colors = this.hairColors[this.selectedColor];
+
+                // Create a temporary canvas for the hair
+                const hairCanvas = document.createElement('canvas');
+                hairCanvas.width = this.previewCanvas.width;
+                hairCanvas.height = this.previewCanvas.height;
+                const hairCtx = hairCanvas.getContext('2d');
+
+                // Set composite mode for better blending
+                hairCtx.globalCompositeOperation = 'source-over';
+
+                // Draw hair based on style with realistic rendering
+                switch (this.selectedStyle) {
+                    case 'long':
+                        this.drawRealisticLongHair(hairCtx, region, colors);
+                        break;
+                    case 'short':
+                        this.drawRealisticShortHair(hairCtx, region, colors);
+                        break;
+                    case 'bob':
+                        this.drawRealisticBobHair(hairCtx, region, colors);
+                        break;
+                    case 'pixie':
+                        this.drawRealisticPixieHair(hairCtx, region, colors);
+                        break;
+                    case 'curly':
+                        this.drawRealisticCurlyHair(hairCtx, region, colors);
+                        break;
+                    case 'wavy':
+                        this.drawRealisticWavyHair(hairCtx, region, colors);
+                        break;
+                    case 'straight':
+                        this.drawRealisticStraightHair(hairCtx, region, colors);
+                        break;
+                    case 'afro':
+                        this.drawRealisticAfroHair(hairCtx, region, colors);
+                        break;
+                    case 'buzz':
+                        this.drawRealisticBuzzCut(hairCtx, region, colors);
+                        break;
+                    case 'mohawk':
+                        this.drawRealisticMohawk(hairCtx, region, colors);
+                        break;
+                }
+
+                // Composite the hair onto the preview with soft blending
+                this.previewCtx.globalAlpha = 0.85;
+                this.previewCtx.drawImage(hairCanvas, 0, 0);
+                this.previewCtx.globalAlpha = 1.0;
+            }
+
+            // Helper function to draw realistic hair strands
+            drawHairStrands(ctx, startX, startY, endX, endY, colors, density = 50) {
+                for (let i = 0; i < density; i++) {
+                    const offset = (Math.random() - 0.5) * 20;
+                    const color = Math.random() > 0.7 ? colors.highlight :
+                                 Math.random() > 0.3 ? colors.base : colors.shadow;
+
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1 + Math.random() * 2;
+                    ctx.globalAlpha = 0.3 + Math.random() * 0.4;
+
+                    ctx.beginPath();
+                    ctx.moveTo(startX + offset, startY);
+
+                    // Add natural curve
+                    const cp1x = startX + offset + (endX - startX) / 3;
+                    const cp1y = startY + (endY - startY) / 3 + Math.random() * 30 - 15;
+                    const cp2x = startX + offset + 2 * (endX - startX) / 3;
+                    const cp2y = startY + 2 * (endY - startY) / 3 + Math.random() * 30 - 15;
+
+                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX + offset, endY);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            drawRealisticLongHair(ctx, r, colors) {
+                // Base shape with gradient
+                const gradient = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.height);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.5, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+
+                ctx.beginPath();
+                ctx.moveTo(r.x, r.y);
+                ctx.quadraticCurveTo(r.x - 10, r.y + r.height / 2, r.x + r.width * 0.15, r.y + r.height);
+                ctx.lineTo(r.x + r.width * 0.85, r.y + r.height);
+                ctx.quadraticCurveTo(r.x + r.width + 10, r.y + r.height / 2, r.x + r.width, r.y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Add realistic strands
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < r.width; i += 10) {
+                    this.drawHairStrands(ctx, r.x + i, r.y, r.x + i + (Math.random() - 0.5) * 40, r.y + r.height, colors, 3);
+                }
+            }
+
+            drawRealisticShortHair(ctx, r, colors) {
+                const shortHeight = r.height * 0.5;
+                const gradient = ctx.createRadialGradient(r.x + r.width / 2, r.y, 0, r.x + r.width / 2, r.y + shortHeight, r.width / 2);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.6, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+
+                ctx.beginPath();
+                ctx.roundRect(r.x, r.y, r.width, shortHeight, r.width * 0.2);
+                ctx.fill();
+
+                // Add texture with short strands
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < r.width; i += 8) {
+                    this.drawHairStrands(ctx, r.x + i, r.y, r.x + i + (Math.random() - 0.5) * 15, r.y + shortHeight, colors, 2);
+                }
+            }
+
+            drawRealisticBobHair(ctx, r, colors) {
+                const bobHeight = r.height * 0.7;
+                const gradient = ctx.createLinearGradient(r.x, r.y, r.x, r.y + bobHeight);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.5, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+
+                ctx.beginPath();
+                ctx.moveTo(r.x, r.y);
+                ctx.lineTo(r.x, r.y + bobHeight);
+                ctx.quadraticCurveTo(r.x + r.width / 2, r.y + bobHeight + 15, r.x + r.width, r.y + bobHeight);
+                ctx.lineTo(r.x + r.width, r.y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Add strands
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < r.width; i += 10) {
+                    this.drawHairStrands(ctx, r.x + i, r.y, r.x + i, r.y + bobHeight, colors, 3);
+                }
+            }
+
+            drawRealisticPixieHair(ctx, r, colors) {
+                const pixieHeight = r.height * 0.4;
+                const pixieWidth = r.width * 0.9;
+                const offsetX = r.width * 0.05;
+
+                const gradient = ctx.createRadialGradient(r.x + r.width / 2, r.y + pixieHeight / 2, 0, r.x + r.width / 2, r.y + pixieHeight / 2, pixieWidth / 2);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.7, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+
+                ctx.beginPath();
+                ctx.roundRect(r.x + offsetX, r.y, pixieWidth, pixieHeight, r.width * 0.15);
+                ctx.fill();
+
+                // Very short textured strands
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < pixieWidth; i += 6) {
+                    this.drawHairStrands(ctx, r.x + offsetX + i, r.y, r.x + offsetX + i + (Math.random() - 0.5) * 10, r.y + pixieHeight, colors, 2);
+                }
+            }
+
+            drawRealisticCurlyHair(ctx, r, colors) {
+                const gradient = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.height);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.5, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.6;
+
+                // Create curly texture with circles
+                for (let y = 0; y < r.height; y += 15) {
+                    for (let x = 0; x < r.width; x += 15) {
+                        const size = 8 + Math.random() * 8;
+                        const color = Math.random() > 0.5 ? colors.base : colors.shadow;
+                        ctx.fillStyle = color;
+                        ctx.globalAlpha = 0.4 + Math.random() * 0.3;
+                        ctx.beginPath();
+                        ctx.arc(r.x + x, r.y + y, size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                // Add overall shape
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(r.x, r.y);
+                for (let x = 0; x < r.width; x += 20) {
+                    ctx.quadraticCurveTo(r.x + x + 10, r.y + (Math.random() - 0.5) * 20, r.x + x + 20, r.y);
+                }
+                ctx.lineTo(r.x + r.width, r.y + r.height);
+                ctx.lineTo(r.x, r.y + r.height);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.globalAlpha = 1.0;
+            }
+
+            drawRealisticWavyHair(ctx, r, colors) {
+                const gradient = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.height);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.5, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+
+                ctx.beginPath();
+                ctx.moveTo(r.x, r.y);
+
+                // Create wavy top
+                for (let x = 0; x < r.width; x += 25) {
+                    ctx.quadraticCurveTo(r.x + x + 12, r.y + 10, r.x + x + 25, r.y);
+                }
+
+                ctx.lineTo(r.x + r.width, r.y + r.height);
+                ctx.lineTo(r.x, r.y + r.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // Add wavy strands
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < r.width; i += 12) {
+                    this.drawHairStrands(ctx, r.x + i, r.y, r.x + i + Math.sin(i * 0.1) * 20, r.y + r.height, colors, 3);
+                }
+            }
+
+            drawRealisticStraightHair(ctx, r, colors) {
+                const gradient = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.height);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.4, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+                ctx.fillRect(r.x, r.y, r.width, r.height);
+
+                // Add perfectly straight strands
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < r.width; i += 8) {
+                    const color = Math.random() > 0.6 ? colors.highlight : colors.base;
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1 + Math.random();
+                    ctx.globalAlpha = 0.4 + Math.random() * 0.3;
+
+                    ctx.beginPath();
+                    ctx.moveTo(r.x + i, r.y);
+                    ctx.lineTo(r.x + i + (Math.random() - 0.5) * 5, r.y + r.height);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            drawRealisticAfroHair(ctx, r, colors) {
+                const afroWidth = r.width * 1.5;
+                const afroHeight = r.height * 1.3;
+                const centerX = r.x + r.width / 2;
+                const centerY = r.y + r.height / 2 - r.height * 0.1;
+
+                // Create radial gradient
+                const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, afroWidth / 2);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.5, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.6;
+
+                ctx.beginPath();
+                ctx.ellipse(centerX, centerY, afroWidth / 2, afroHeight / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Add texture with small circles
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < 200; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = Math.random() * afroWidth / 2;
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius * (afroHeight / afroWidth);
+                    const size = 3 + Math.random() * 6;
+                    const color = Math.random() > 0.5 ? colors.base : colors.shadow;
+
+                    ctx.fillStyle = color;
+                    ctx.globalAlpha = 0.3 + Math.random() * 0.4;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            drawRealisticBuzzCut(ctx, r, colors) {
+                const buzzHeight = r.height * 0.25;
+                const buzzWidth = r.width * 0.85;
+                const offsetX = r.width * 0.075;
+
+                const gradient = ctx.createRadialGradient(r.x + r.width / 2, r.y + buzzHeight / 2, 0, r.x + r.width / 2, r.y + buzzHeight / 2, buzzWidth / 2);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.7, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.8;
+
+                ctx.beginPath();
+                ctx.roundRect(r.x + offsetX, r.y, buzzWidth, buzzHeight, r.width * 0.1);
+                ctx.fill();
+
+                // Add very fine texture
+                ctx.globalAlpha = 0.5;
+                for (let i = 0; i < 100; i++) {
+                    const x = r.x + offsetX + Math.random() * buzzWidth;
+                    const y = r.y + Math.random() * buzzHeight;
+                    ctx.fillStyle = Math.random() > 0.5 ? colors.shadow : colors.base;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            drawRealisticMohawk(ctx, r, colors) {
+                const centerWidth = r.width * 0.35;
+                const mohawkHeight = r.height * 1.3;
+                const centerX = r.x + r.width / 2;
+
+                const gradient = ctx.createLinearGradient(centerX, r.y - r.height * 0.2, centerX, r.y + mohawkHeight);
+                gradient.addColorStop(0, colors.highlight);
+                gradient.addColorStop(0.5, colors.base);
+                gradient.addColorStop(1, colors.shadow);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.7;
+
+                ctx.beginPath();
+                ctx.roundRect(centerX - centerWidth / 2, r.y - r.height * 0.2, centerWidth, mohawkHeight, centerWidth * 0.2);
+                ctx.fill();
+
+                // Add spiky texture
+                ctx.globalAlpha = 1.0;
+                for (let i = 0; i < 20; i++) {
+                    const x = centerX - centerWidth / 2 + Math.random() * centerWidth;
+                    const startY = r.y + Math.random() * mohawkHeight * 0.3;
+                    const endY = startY - 30 - Math.random() * 40;
+
+                    this.drawHairStrands(ctx, x, startY, x + (Math.random() - 0.5) * 15, endY, colors, 2);
+                }
+            }
+
+            drawPreview() {
+                this.previewCanvas.width = this.capturedImage.width;
+                this.previewCanvas.height = this.capturedImage.height;
+                this.previewCtx.drawImage(this.capturedImage, 0, 0);
+            }
+
+            resetStyle() {
+                this.selectedStyle = 'long';
+                this.selectedColor = 'brown';
+                this.renderStyleButtons();
+                this.renderColorButtons();
+                this.applyHairStyle();
+            }
+
+            savePhoto() {
+                const link = document.createElement('a');
+                link.download = `hair-tryon-realistic-${Date.now()}.png`;
+                link.href = this.previewCanvas.toDataURL('image/png');
+                link.click();
+
+                const statusDiv = document.getElementById('detectionStatus');
+                const originalText = statusDiv.textContent;
+                statusDiv.className = 'status-message success';
+                statusDiv.textContent = '✓ Photo saved successfully!';
+
+                setTimeout(() => {
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = originalText;
+                }, 3000);
+            }
+
+            reset() {
+                this.capturedImage = null;
+                this.detectedFace = null;
+                this.selectedStyle = 'long';
+                this.selectedColor = 'brown';
+                document.getElementById('styleControls').style.display = 'none';
+                document.getElementById('saveButton').style.display = 'none';
+                document.getElementById('currentStyle').style.display = 'none';
+                this.showScreen('welcomeScreen');
+            }
+
+            showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                document.getElementById(screenId).classList.add('active');
+            }
+
+            capitalize(str) {
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            }
+        }
+
+        // Initialize app when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new HairTryOnApp();
+        });
+    </script>
+</body>
+</html>

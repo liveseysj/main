@@ -1,0 +1,339 @@
+// MR_Signals_confirm.afl — MR_Signals.afl with a switchable CONFIRMATION ENTRY for all 10 signals.
+// Setups, exits, scale-in / conviction sizing and the position model are unchanged.
+//
+// ENTRY MODE (Parameters -> "Entry mode")
+//   Original           : the per-signal entries of MR_Signals.afl (close t / limit t+1 at C-1 ATR / open t+1).
+//                        With this setting the formula trades exactly like MR_Signals.afl.
+//   Confirm C>Ref(H,-1): a setup on day t ARMS the signal. The leg is entered at the CLOSE of the first day
+//                        on t+1 .. t+W (W = "Confirm window") whose close is above the prior day's high.
+//                        Shorts (F18, G12) are mirrored: close below the prior day's low.
+//                        No confirmation inside the window = no trade.
+//     * One confirmation uses up the armed setup. Several setups of the same signal before a confirmation
+//       still give ONE leg (each setup re-arms the window, it doesn't stack).
+//     * A setup that can't be taken on the confirming day (wrong side of the book, leg cap, duplicate rule)
+//       stays armed until its window expires.
+//     * The universe filter is checked on the setup day, not on the confirming day.
+//     * All entries are at the close, so a leg can't exit on its entry bar.
+//       D13 ("same close as the fill") therefore becomes "exit at the next close" (a 1-day hold).
+//
+// EXIT CLOCK (Parameters -> "Exit clock starts at")
+//   Signal day: as in the original — the t+10 / t+5 limits count from the setup day. With a late confirmation
+//               the leg may already be past its limit and exits at the next close.
+//   Fill day  : the t+10 / t+5 limits count from the confirming day (same holding time as a close-t entry).
+//   Has no effect in Original mode (the original rule — counting from the signal day — is always used).
+//
+// SETUP, DEFINITIONS and POSITION MODEL: same as MR_Signals.afl.
+//   * Norgate database with TOTAL RETURN price adjustment; watchlist "S&P 100 Current & Past" + "Nasdaq 100 Current & Past".
+//   * Exploration lists today's setups AND the signals still armed for tomorrow, with tomorrow's trigger prices
+//     (long: close above today's high; short: close below today's low).
+
+#include_once "Formulas\Norgate Data\Norgate Data Functions.afl"
+
+SetBarsRequired( sbrAll, sbrAll );
+SetTradeDelays( 0, 0, 0, 0 );
+SetOption( "AllowSameBarExit", True );
+SetOption( "ActivateStopsImmediately", False );
+SetBacktestMode( backtestRegular );
+
+NAMES = "D04,D11,D13,D27,E18,F01,F08,F18,G12,G20";
+NSIG  = 10;
+
+confirm   = ParamToggle( "Entry mode", "Original|Confirm C>Ref(H,-1)", 1 );
+confWin   = Param( "Confirm window (bars after setup)", 5, 1, 20, 1 );
+clockFill = ParamToggle( "Exit clock starts at", "Signal day|Fill day", 1 );
+
+maxPos  = Param( "Max open positions (stocks)", 20, 1, 200, 1 );
+maxLegs = Param( "Max legs per stock", 4, 1, 10, 1 );
+repeatOK = ParamToggle( "Same signal can add a leg again", "No|Yes", 1 );
+e1 = Param( "Exposure at 1 leg (% equity)", 5, 0, 100, 0.5 );
+e2 = Param( "Exposure at 2 legs (% equity)", 9, 0, 100, 0.5 );
+e3 = Param( "Exposure at 3 legs (% equity)", 12, 0, 100, 0.5 );
+e4 = Param( "Exposure at 4+ legs (% equity)", 15, 0, 100, 0.5 );
+minBars = Param( "Min bars of history", 250, 0, 500, 10 );
+SetOption( "MaxOpenPositions", maxPos );
+
+onMask = 0;
+for( j = 0; j < NSIG; j++ )
+    onMask += ParamToggle( "Use " + StrExtract( NAMES, j ), "Off|On", 1 ) * 2 ^ j;
+
+function HasBit( x, b )             // is bit b (a power of 2) set in x — AFL has no BitAnd
+{
+    return ( floor( x / b ) % 2 ) == 1;
+}
+
+function Expo( n, x1, x2, x3, x4 )
+{
+    r = 0;
+    if( n == 1 ) r = x1;
+    if( n == 2 ) r = x2;
+    if( n == 3 ) r = x3;
+    if( n >= 4 ) r = x4;
+    return r;
+}
+
+// ---------------- features (known at the close of day t) ----------------
+tr       = ATR( 1 );
+atr14    = MA( tr, 14 );
+atrPrev  = Ref( atr14, -1 );
+ibs      = IIf( H > L, ( C - L ) / ( H - L ), 0.5 );
+ma5      = MA( C, 5 );
+ma10     = MA( C, 10 );
+ma50     = MA( C, 50 );
+ma200    = MA( C, 200 );
+rsi2     = RSI( 2 );
+rsi3     = RSI( 3 );
+rsi14    = RSI( 14 );
+up200    = C > ma200;
+dn200    = NOT up200 AND ma200 > 0;
+dn50     = NOT ( C > ma50 ) AND ma50 > 0;
+oc       = ( C - O ) / atrPrev;
+ret5     = ( C - Ref( C, -5 ) ) / atr14;
+ret10    = ( C - Ref( C, -10 ) ) / atr14;
+d10      = ( C - ma10 ) / atr14;
+upStreak = BarsSince( C <= Ref( C, -1 ) );
+calm     = PercentRank( atr14 / C, 252 ) < 30;
+
+spyC     = Foreign( "SPY", "C" );
+spyDn200 = NOT ( spyC > MA( spyC, 200 ) );
+spyRsi2  = RSIa( spyC, 2 );
+
+inIdx = NorgateIndexConstituentTimeSeries( "$OEX" ) OR NorgateIndexConstituentTimeSeries( "$NDX" );
+univ  = inIdx AND NorgateOriginalCloseTimeSeries() >= 5 AND BarIndex() >= minBars AND atr14 > 0;
+
+// ---------------- the 10 setups (unchanged) ----------------
+sD04 = univ AND rsi2 < 2 AND up200;
+sD11 = univ AND oc < -1 AND up200;
+sD13 = univ AND ibs < 0.2 AND spyDn200;
+sD27 = univ AND ibs < 0.1 AND spyRsi2 < 10;
+sE18 = univ AND ret10 < -4 AND up200 AND dn50;
+sF01 = univ AND rsi3 < 15 AND up200;
+sF08 = univ AND d10 < -2 AND ibs < 0.25 AND up200;
+sF18 = univ AND upStreak >= 3 AND dn200 AND rsi14 > 70;
+sG12 = univ AND ret10 > 4 AND dn200 AND rsi14 > 70;
+sG20 = univ AND ret5 < -3 AND up200 AND calm;
+
+setMask = Nz( sD04 ) * 1 + Nz( sD11 ) * 2 + Nz( sD13 ) * 4 + Nz( sD27 ) * 8 + Nz( sE18 ) * 16
+        + Nz( sF01 ) * 32 + Nz( sF08 ) * 64 + Nz( sF18 ) * 128 + Nz( sG12 ) * 256 + Nz( sG20 ) * 512;
+nToday = Nz( sD04 ) + Nz( sD11 ) + Nz( sD13 ) + Nz( sD27 ) + Nz( sE18 )
+       + Nz( sF01 ) + Nz( sF08 ) + Nz( sF18 ) + Nz( sG12 ) + Nz( sG20 );
+
+LIMIT_ATR = 1.0;
+MAX_HOLD  = 10;
+PO_HOLD   = 5;
+NONE      = -1e6;                  // "no armed setup"
+
+Buy = Sell = Short = Cover = 0;
+BuyPrice = SellPrice = ShortPrice = CoverPrice = C;
+psz   = C * 0;
+pmeth = C * 0 + spsNoChange;
+legsOpen = C * 0;
+pendL = C * 0;                     // long signals armed for tomorrow (confirm mode)
+pendS = C * 0;                     // short signals armed for tomorrow (confirm mode)
+
+if( BarCount > 30 )
+{
+    // side: 1 long / -1 short | entry (Original mode): 0 close t, 1 limit t+1, 2 open t+1
+    // exit: 0 first close past SMA5, 1 first up (down) close, 2 same close as the fill, 3 po5
+    sSide = C * 0; sEnt = C * 0; sExt = C * 0;
+    sSide[0] =  1; sEnt[0] = 0; sExt[0] = 0;     // D04
+    sSide[1] =  1; sEnt[1] = 1; sExt[1] = 1;     // D11
+    sSide[2] =  1; sEnt[2] = 1; sExt[2] = 2;     // D13
+    sSide[3] =  1; sEnt[3] = 0; sExt[3] = 1;     // D27
+    sSide[4] =  1; sEnt[4] = 0; sExt[4] = 0;     // E18
+    sSide[5] =  1; sEnt[5] = 1; sExt[5] = 0;     // F01
+    sSide[6] =  1; sEnt[6] = 0; sExt[6] = 0;     // F08
+    sSide[7] = -1; sEnt[7] = 2; sExt[7] = 0;     // F18
+    sSide[8] = -1; sEnt[8] = 0; sExt[8] = 3;     // G12
+    sSide[9] =  1; sEnt[9] = 0; sExt[9] = 3;     // G20
+
+    // leg slots: legSB = bar the exit clock counts from, legEB = last bar on which the leg may NOT exit
+    legLive = C * 0; legSig = C * 0; legSB = C * 0; legEB = C * 0; legPx = C * 0;
+    lastSet = C * 0 + NONE;        // per signal: bar of the latest armed (unused) setup
+    nLeg = 0; book = 0;
+
+    for( i = 1; i < BarCount; i++ )
+    {
+        nBefore = nLeg; sideNow = book;
+        inN = 0; inSum = 0; outN = 0; outSum = 0;
+
+        // ---- new legs ----
+        for( j = 0; j < NSIG; j++ )
+        {
+            bit = 2 ^ j;
+            if( NOT HasBit( onMask, bit ) OR nLeg >= maxLegs ) continue;
+            sd = sSide[ j ];
+            if( book != 0 AND sd != book ) continue;
+            if( NOT repeatOK )
+            {
+                dup = False;
+                for( s = 0; s < maxLegs; s++ )
+                    if( legLive[ s ] AND legSig[ s ] == j ) dup = True;
+                if( dup ) continue;
+            }
+            got = False; px = 0; sb = i; eb = i;
+
+            if( confirm )
+            {
+                age = i - lastSet[ j ];
+                if( age >= 1 AND age <= confWin )
+                {
+                    if( sd == 1 AND C[ i ] > H[ i - 1 ] )  got = True;
+                    if( sd == -1 AND C[ i ] < L[ i - 1 ] ) got = True;
+                    if( got )
+                    {
+                        px = C[ i ]; eb = i;
+                        if( clockFill ) sb = i;
+                        else sb = lastSet[ j ];
+                        lastSet[ j ] = NONE;          // the setup is used up
+                    }
+                }
+            }
+            else
+            {
+                et = sEnt[ j ];
+                if( et == 0 AND HasBit( setMask[ i ], bit ) )
+                {
+                    got = True; px = C[ i ]; sb = i;
+                }
+                if( et == 1 AND HasBit( setMask[ i - 1 ], bit ) )
+                {
+                    lim = C[ i - 1 ] - sd * LIMIT_ATR * atr14[ i - 1 ];
+                    if( sd == 1 AND L[ i ] < lim )  { got = True; px = Min( lim, O[ i ] ); }
+                    if( sd == -1 AND H[ i ] > lim ) { got = True; px = Max( lim, O[ i ] ); }
+                    sb = i - 1;
+                }
+                if( et == 2 AND HasBit( setMask[ i - 1 ], bit ) )
+                {
+                    got = True; px = O[ i ]; sb = i - 1;
+                }
+                eb = sb;                              // original rule: next-day fills may exit on the fill bar
+            }
+
+            if( got )
+            {
+                for( s = 0; s < maxLegs; s++ )
+                {
+                    if( NOT legLive[ s ] )
+                    {
+                        legLive[ s ] = 1; legSig[ s ] = j; legSB[ s ] = sb; legEB[ s ] = eb; legPx[ s ] = px;
+                        break;
+                    }
+                }
+                nLeg++; book = sd; sideNow = sd;
+                inN++; inSum += px;
+            }
+        }
+
+        // ---- leg exits ----
+        for( s = 0; s < maxLegs; s++ )
+        {
+            if( NOT legLive[ s ] OR i <= legEB[ s ] ) continue;
+            k = i - legSB[ s ]; xt = sExt[ legSig[ s ] ]; sd = book;
+            doExit = False; xPx = C[ i ];
+            if( xt == 0 AND ( sd * ( C[ i ] - ma5[ i ] ) > 0 OR k >= MAX_HOLD ) ) doExit = True;
+            if( xt == 1 AND ( sd * ( C[ i ] - C[ i - 1 ] ) > 0 OR k >= MAX_HOLD ) ) doExit = True;
+            if( xt == 2 ) doExit = True;
+            if( xt == 3 )
+            {
+                if( sd * ( O[ i ] - legPx[ s ] ) > 0 ) { doExit = True; xPx = O[ i ]; }
+                else if( k >= PO_HOLD ) doExit = True;
+            }
+            if( doExit )
+            {
+                legLive[ s ] = 0; nLeg--;
+                outN++; outSum += xPx;
+            }
+        }
+        if( nLeg == 0 ) book = 0;
+
+        // ---- arm today's setups (confirm mode); they can confirm from tomorrow ----
+        if( confirm )
+        {
+            nl = 0; ns = 0;
+            for( j = 0; j < NSIG; j++ )
+            {
+                bit = 2 ^ j;
+                if( NOT HasBit( onMask, bit ) ) continue;
+                if( HasBit( setMask[ i ], bit ) ) lastSet[ j ] = i;
+                if( i + 1 - lastSet[ j ] <= confWin )
+                {
+                    if( sSide[ j ] == 1 ) nl++;
+                    else ns++;
+                }
+            }
+            pendL[ i ] = nl; pendS[ i ] = ns;
+        }
+
+        // ---- translate the leg change into AmiBroker signals (unchanged) ----
+        nAfter = nLeg;
+        legsOpen[ i ] = nAfter;
+        inPx = C[ i ]; outPx = C[ i ];
+        if( inN > 0 )  inPx = inSum / inN;
+        if( outN > 0 ) outPx = outSum / outN;
+        opn = 0; cls = 0; scl = 0; sclPx = C[ i ];
+
+        if( nBefore == 0 AND nAfter > 0 )
+        {
+            opn = 1; psz[ i ] = Expo( nAfter, e1, e2, e3, e4 ); pmeth[ i ] = spsPercentOfEquity;
+        }
+        if( nBefore == 0 AND nAfter == 0 AND inN > 0 )
+        {
+            opn = 1; cls = 1; psz[ i ] = Expo( inN, e1, e2, e3, e4 ); pmeth[ i ] = spsPercentOfEquity;
+        }
+        if( nBefore > 0 AND nAfter == 0 ) cls = 1;
+        if( nBefore > 0 AND nAfter > nBefore )
+        {
+            scl = sigScaleIn; sclPx = inPx;
+            psz[ i ] = Expo( nAfter, e1, e2, e3, e4 ) - Expo( nBefore, e1, e2, e3, e4 );
+            pmeth[ i ] = spsPercentOfEquity;
+        }
+        if( nAfter > 0 AND nAfter < nBefore )
+        {
+            scl = sigScaleOut; sclPx = outPx;
+            psz[ i ] = 100 * ( 1 - Expo( nAfter, e1, e2, e3, e4 ) / Expo( nBefore, e1, e2, e3, e4 ) );
+            pmeth[ i ] = spsPercentOfPosition;
+        }
+
+        if( sideNow == 1 )
+        {
+            if( opn ) { Buy[ i ] = 1; BuyPrice[ i ] = inPx; }
+            if( cls ) { Sell[ i ] = 1; SellPrice[ i ] = outPx; }
+            if( scl == sigScaleIn )  { Buy[ i ] = sigScaleIn;  BuyPrice[ i ] = sclPx; }
+            if( scl == sigScaleOut ) { Buy[ i ] = sigScaleOut; SellPrice[ i ] = sclPx; }
+        }
+        if( sideNow == -1 )
+        {
+            if( opn ) { Short[ i ] = 1; ShortPrice[ i ] = inPx; }
+            if( cls ) { Cover[ i ] = 1; CoverPrice[ i ] = outPx; }
+            if( scl == sigScaleIn )  { Short[ i ] = sigScaleIn;  ShortPrice[ i ] = sclPx; }
+            if( scl == sigScaleOut ) { Short[ i ] = sigScaleOut; CoverPrice[ i ] = sclPx; }
+        }
+    }
+}
+
+SetPositionSize( psz, pmeth );
+
+PositionScore = legsOpen * 100 + IIf( Short, rsi14, 50 - 10 * d10 );
+
+// ---------------- exploration: today's setups + signals armed for tomorrow ----------------
+Filter = Status( "lastbarinrange" ) AND ( nToday > 0 OR pendL + pendS > 0 );
+AddColumn( nToday, "Setups today", 1.0 );
+AddColumn( pendL, "Armed long (tmrw)", 1.0 );
+AddColumn( pendS, "Armed short (tmrw)", 1.0 );
+AddColumn( legsOpen, "Open legs (bt)", 1.0 );
+AddColumn( C, "Close", 1.2 );
+AddColumn( H, "Long trigger: tmrw C >", 1.2 );
+AddColumn( L, "Short trigger: tmrw C <", 1.2 );
+AddColumn( atr14, "ATR14", 1.2 );
+AddColumn( C - atr14, "Long lim t+1 (orig)", 1.2 );
+AddColumn( ma5, "SMA5", 1.2 );
+AddColumn( sD04, "D04 L", 1.0 );
+AddColumn( sD11, "D11 L", 1.0 );
+AddColumn( sD13, "D13 L", 1.0 );
+AddColumn( sD27, "D27 L", 1.0 );
+AddColumn( sE18, "E18 L", 1.0 );
+AddColumn( sF01, "F01 L", 1.0 );
+AddColumn( sF08, "F08 L", 1.0 );
+AddColumn( sF18, "F18 S", 1.0 );
+AddColumn( sG12, "G12 S", 1.0 );
+AddColumn( sG20, "G20 L", 1.0 );
